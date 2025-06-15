@@ -53,14 +53,23 @@ class _RecipePageState extends State<RecipePage> {
               itemBuilder: (context, index) {
                 final recipe = _recipes[index];
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListTile(
                     leading: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: recipe['image'] != null
-                          ? Image.network(recipe['image'],
-                              width: 60, height: 60, fit: BoxFit.cover)
+                          ? Image.network(
+                              recipe['image'],
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                            )
                           : const Icon(Icons.fastfood),
                     ),
                     title: Text(
@@ -75,6 +84,9 @@ class _RecipePageState extends State<RecipePage> {
                           builder: (_) => RecipeDetailPage(
                             recipeId: recipe['id'],
                             title: recipe['title'],
+                            recipe: recipe,
+                            isFavorite: false,
+                            onFavoriteToggle: () {},
                           ),
                         ),
                       );

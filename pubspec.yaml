@@ -28,6 +28,11 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  carousel_slider:
+    git:
+      url: https://github.com/serenader2014/flutter_carousel_slider.git
+      ref: master
+
   flutter:
     sdk: flutter
 
@@ -59,6 +64,10 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/
+    - assets/background1.png
+    - assets/background2.png
+    - assets/background3.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'pages/home_page.dart';
+import 'pages/splash_page.dart';
 
 Future<void> main() async {
   await dotenv.load();
@@ -34,10 +34,7 @@ class MyApp extends StatelessWidget {
             fontWeight: FontWeight.bold,
             color: Color(0xFF388E3C),
           ),
-          bodyMedium: TextStyle(
-            fontSize: 16,
-            color: Color(0xFF424242),
-          ),
+          bodyMedium: TextStyle(fontSize: 16, color: Color(0xFF424242)),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -58,10 +55,13 @@ class MyApp extends StatelessWidget {
             borderSide: BorderSide.none,
           ),
           hintStyle: const TextStyle(color: Colors.grey),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
         ),
       ),
-      home: const HomePage(),
+      home: const SplashPage(),
     );
   }
 }
