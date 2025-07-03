@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:oqtemprahoje/services/gemini_translation_service.dart';
+import 'package:oqtemprahoje/services/translation_manager.dart';
 import 'recipe_page.dart';
 import 'recipe_detail_page.dart';
 
@@ -46,15 +46,19 @@ class _HomePageState extends State<HomePage>
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        List<Map<String, dynamic>> suggestions = List<Map<String, dynamic>>.from(data['recipes']);
+        List<Map<String, dynamic>> suggestions =
+            List<Map<String, dynamic>>.from(data['recipes']);
 
-        // Traduza as sugestões usando GeminiService
-        final gemini = GeminiService();
-        final translated = await gemini.traduzirJsonArray(suggestions);
-        print('Sugestões traduzidas: $translated');
+        // Traduzir usando o sistema de banco + Gemini
+        final translationManager = TranslationManager();
+        final translatedSuggestions = await translationManager
+            .translateRecipesList(
+              suggestions,
+              ['title', 'summary'], // Campos a serem traduzidos
+            );
 
         setState(() {
-          _suggestions = List<Map<String, dynamic>>.from(translated);
+          _suggestions = translatedSuggestions;
           _loadingSuggestion = false;
         });
       } else {

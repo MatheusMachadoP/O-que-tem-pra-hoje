@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:oqtemprahoje/services/translation_manager.dart';
 
 class RecipeDetailPage extends StatefulWidget {
   final int recipeId;
@@ -43,8 +44,39 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     final response = await http.get(Uri.parse(url));
 
     if (response.statusCode == 200) {
+      Map<String, dynamic> recipeData = json.decode(response.body);
+
+      // Traduzir campos da receita usando o sistema de banco + Gemini
+      final translationManager = TranslationManager();
+      final translatedRecipe = await translationManager.translateRecipeFields(
+        recipeData,
+        ['title', 'instructions'], // Campos a serem traduzidos
+      );
+
+      // Traduzir ingredientes separadamente (pois é uma lista)
+      if (translatedRecipe['extendedIngredients'] != null) {
+        List<dynamic> ingredients = translatedRecipe['extendedIngredients'];
+        for (int i = 0; i < ingredients.length; i++) {
+          try {
+            final original = ingredients[i]['original'];
+            if (original != null && original is String && original.isNotEmpty) {
+              final translatedText = await translationManager
+                  .translateRecipeField(
+                    widget.recipeId,
+                    'ingredient_$i',
+                    original,
+                  );
+              ingredients[i]['original'] = translatedText;
+            }
+          } catch (e) {
+            // Se houver erro na tradução de um ingrediente, mantém o original
+            print('Erro ao traduzir ingrediente $i: $e');
+          }
+        }
+      }
+
       setState(() {
-        _recipeDetail = json.decode(response.body);
+        _recipeDetail = translatedRecipe;
         _isLoading = false;
       });
     } else {

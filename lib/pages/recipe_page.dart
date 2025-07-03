@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:oqtemprahoje/services/translation_manager.dart';
 import 'recipe_detail_page.dart';
 
 class RecipePage extends StatefulWidget {
@@ -33,8 +34,19 @@ class _RecipePageState extends State<RecipePage> {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = json.decode(response.body);
+      List<Map<String, dynamic>> recipes = List<Map<String, dynamic>>.from(
+        data,
+      );
+
+      // Traduzir títulos das receitas usando o sistema de banco + Gemini
+      final translationManager = TranslationManager();
+      final translatedRecipes = await translationManager.translateRecipesList(
+        recipes,
+        ['title'], // Traduzir apenas o título
+      );
+
       setState(() {
-        _recipes = data;
+        _recipes = translatedRecipes;
         _isLoading = false;
       });
     } else {
