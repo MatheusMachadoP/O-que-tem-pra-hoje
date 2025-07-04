@@ -1,23 +1,26 @@
-import 'package:oqtemprahoje/services/gemini_translation_service.dart';
+import 'package:oqtemprahoje/services/openai_translation_service.dart';
 import 'package:oqtemprahoje/services/translation_database_service.dart';
 
 class TranslationManager {
-  final GeminiService _geminiService = GeminiService();
   final TranslationDatabaseService _dbService = TranslationDatabaseService();
 
-  // Traduzir múltiplos campos de uma receita
+  String _removeHtmlTags(String text) {
+    final RegExp htmlTagRegex = RegExp(r'<[^>]*>');
+    String cleanText = text.replaceAll(htmlTagRegex, ' ');
+    cleanText = cleanText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return cleanText;
+  }
+
   Future<Map<String, dynamic>> translateRecipeFields(
     Map<String, dynamic> recipe,
     List<String> fieldsToTranslate,
   ) async {
     final recipeId = recipe['id'] as int;
 
-    // Buscar traduções existentes no banco
     final existingTranslations = await _dbService.getRecipeTranslations(
       recipeId,
     );
 
-    // Separar campos que precisam ser traduzidos
     Map<String, String> toTranslate = {};
     Map<String, String> originalTexts = {};
 
@@ -28,8 +31,9 @@ class TranslationManager {
           recipe[field] = existingTranslations[field];
         } else {
           // Adicionar à lista para traduzir
-          toTranslate[field] = recipe[field].toString();
-          originalTexts[field] = recipe[field].toString();
+          String originalText = recipe[field].toString();
+          toTranslate[field] = originalText;
+          originalTexts[field] = originalText;
         }
       }
     }
@@ -37,44 +41,36 @@ class TranslationManager {
     // Se há campos para traduzir, fazer a tradução
     if (toTranslate.isNotEmpty) {
       try {
-        // Converter para formato que o Gemini aceita
-        List<Map<String, dynamic>> toTranslateList = [toTranslate];
+        for (String field in toTranslate.keys) {
+          String originalText = toTranslate[field]!;
 
-        // Traduzir com Gemini
-        final translated = await _geminiService.traduzirJsonArray(
-          toTranslateList,
-        );
+          // Traduzindo
+          String translatedText = await OpenAITranslationService.translateText(
+            originalText,
+            'Portuguese',
+          );
 
-        if (translated.isNotEmpty) {
-          final translatedData = translated[0];
-          if (translatedData is Map<String, dynamic>) {
-            final translatedFields = translatedData;
+          recipe[field] = translatedText;
 
-            // Atualizar recipe com traduções
-            for (String field in toTranslate.keys) {
-              if (translatedFields.containsKey(field)) {
-                recipe[field] = translatedFields[field];
-              }
-            }
-
-            // Salvar traduções no banco
-            await _dbService.saveRecipeTranslations(
-              recipeId,
-              originalTexts,
-              Map<String, String>.from(translatedFields),
-            );
-          }
+          await _dbService.saveTranslation(
+            recipeId,
+            field,
+            originalText,
+            translatedText,
+          );
         }
       } catch (e) {
         print('Erro na tradução: $e');
-        // Em caso de erro, manter textos originais
+        for (String field in toTranslate.keys) {
+          recipe[field] = _removeHtmlTags(toTranslate[field]!);
+        }
       }
     }
 
     return recipe;
   }
 
-  // Traduzir uma lista de receitas
+  // Traduzir a grande fucking lista de receitas
   Future<List<Map<String, dynamic>>> translateRecipesList(
     List<Map<String, dynamic>> recipes,
     List<String> fieldsToTranslate,
@@ -109,32 +105,66 @@ class TranslationManager {
     }
 
     try {
-      // Traduzir com Gemini
-      final translated = await _geminiService.traduzirJsonArray([
-        {fieldName: originalText},
-      ]);
+      final translatedText = await OpenAITranslationService.translateText(
+        originalText,
+        'Portuguese',
+      );
 
-      if (translated.isNotEmpty) {
-        final translatedValue = translated[0][fieldName];
-        if (translatedValue != null && translatedValue is String) {
-          final translatedText = translatedValue;
+      await _dbService.saveTranslation(
+        recipeId,
+        fieldName,
+        originalText,
+        translatedText,
+      );
 
-          // Salvar no banco
-          await _dbService.saveTranslation(
-            recipeId,
-            fieldName,
-            originalText,
-            translatedText,
-          );
-
-          return translatedText;
-        }
-      }
+      return translatedText;
     } catch (e) {
       print('Erro na tradução do campo $fieldName: $e');
+      return _removeHtmlTags(originalText);
+    }
+  }
+
+  Future<List<String>> translateInstructions(
+    int recipeId,
+    List<String> instructions,
+  ) async {
+    List<String> translatedInstructions = [];
+
+    for (int i = 0; i < instructions.length; i++) {
+      String fieldName = 'instruction_$i';
+      String originalText = instructions[i];
+
+      String translatedText = await translateRecipeField(
+        recipeId,
+        fieldName,
+        originalText,
+      );
+
+      translatedInstructions.add(translatedText);
     }
 
-    // Em caso de erro, retornar texto original
-    return originalText;
+    return translatedInstructions;
+  }
+
+  Future<List<String>> translateIngredients(
+    int recipeId,
+    List<String> ingredients,
+  ) async {
+    List<String> translatedIngredients = [];
+
+    for (int i = 0; i < ingredients.length; i++) {
+      String fieldName = 'ingredient_$i';
+      String originalText = ingredients[i];
+
+      String translatedText = await translateRecipeField(
+        recipeId,
+        fieldName,
+        originalText,
+      );
+
+      translatedIngredients.add(translatedText);
+    }
+
+    return translatedIngredients;
   }
 }

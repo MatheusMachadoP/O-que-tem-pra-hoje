@@ -103,9 +103,101 @@ class TranslationDatabaseService {
     await batch.commit();
   }
 
-  // Limpar todas as traduções (útil para desenvolvimento)
   Future<void> clearAllTranslations() async {
     final db = await database;
     await db.delete('translations');
+    print('🗑️ Banco de traduções limpo completamente!');
+  }
+
+  Future<void> clearRecipeTranslations(int recipeId) async {
+    final db = await database;
+    await db.delete(
+      'translations',
+      where: 'recipe_id = ?',
+      whereArgs: [recipeId],
+    );
+    print('🗑️ Traduções da receita $recipeId removidas!');
+  }
+
+  Future<String> getDatabasePath() async {
+    return join(await getDatabasesPath(), 'translations.db');
+  }
+
+  Future<void> debugPrintAllTranslations() async {
+    final db = await database;
+    final result = await db.query('translations', orderBy: 'created_at DESC');
+
+    print('=== TODAS AS TRADUÇÕES ===');
+    print('Total de registros: ${result.length}');
+
+    for (var row in result) {
+      print('ID: ${row['id']}');
+      print('Recipe ID: ${row['recipe_id']}');
+      print('Campo: ${row['field_name']}');
+      print('Original: ${row['original_text']}');
+      print('Traduzido: ${row['translated_text']}');
+      print('Data: ${row['created_at']}');
+      print('---');
+    }
+
+    String dbPath = await getDatabasePath();
+    print('Caminho do banco: $dbPath');
+  }
+
+  Future<void> debugDatabaseStatus() async {
+    try {
+      final db = await database;
+
+      // Verificar se a tabela existe
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='translations'",
+      );
+
+      print('=== STATUS DO BANCO ===');
+      print('Tabela translations existe: ${tables.isNotEmpty}');
+
+      if (tables.isNotEmpty) {
+        final count = await db.rawQuery(
+          'SELECT COUNT(*) as count FROM translations',
+        );
+        print('Total de traduções: ${count.first['count']}');
+
+        final countByRecipe = await db.rawQuery('''
+          SELECT recipe_id, COUNT(*) as count 
+          FROM translations 
+          GROUP BY recipe_id
+        ''');
+
+        print('Traduções por receita:');
+        for (var row in countByRecipe) {
+          print('  Recipe ${row['recipe_id']}: ${row['count']} traduções');
+        }
+      }
+
+      print('Caminho: ${await getDatabasePath()}');
+      print('=====================');
+    } catch (e) {
+      print('Erro ao verificar banco: $e');
+    }
+  }
+
+  Future<Map<int, int>> getTranslationCountByRecipe() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT recipe_id, COUNT(*) as count 
+      FROM translations 
+      GROUP BY recipe_id
+    ''');
+
+    Map<int, int> counts = {};
+    for (var row in result) {
+      counts[row['recipe_id'] as int] = row['count'] as int;
+    }
+    return counts;
+  }
+
+  Future<List<Map<String, dynamic>>> getAllTranslations() async {
+    final db = await database;
+    return await db.query('translations', orderBy: 'created_at DESC');
   }
 }

@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:oqtemprahoje/services/translation_manager.dart';
+import 'package:oqtemprahoje/services/translation_database_service.dart';
+import 'package:oqtemprahoje/services/openai_translation_service.dart';
 import 'package:oqtemprahoje/services/ingredient_translation_service.dart';
-import 'package:oqtemprahoje/services/favorites_service.dart';
 import 'recipe_page.dart';
 import 'recipe_detail_page.dart';
 
@@ -19,7 +20,7 @@ class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _ingredientController = TextEditingController();
   final List<String> _ingredients = [];
-  final FavoritesService _favoritesService = FavoritesService();
+  final List<Map<String, dynamic>> _favorites = [];
 
   List<Map<String, dynamic>> _suggestions = [];
   bool _loadingSuggestion = true;
@@ -51,10 +52,13 @@ class _HomePageState extends State<HomePage>
         List<Map<String, dynamic>> suggestions =
             List<Map<String, dynamic>>.from(data['recipes']);
 
-        // Traduzindo
+        // Traduzir usando o sistema de banco + chatgptenis
         final translationManager = TranslationManager();
         final translatedSuggestions = await translationManager
-            .translateRecipesList(suggestions, ['title', 'summary']);
+            .translateRecipesList(
+              suggestions,
+              ['title', 'summary'], // Campos a serem traduzidos
+            );
 
         setState(() {
           _suggestions = translatedSuggestions;
@@ -99,16 +103,14 @@ class _HomePageState extends State<HomePage>
       );
 
       try {
-        // Traduzindo p/ o ingles
+        // Traduzir ingredientes para inglês
         final translatedIngredients =
             await IngredientTranslationService.translateIngredients(
               _ingredients,
             );
 
-        
         if (mounted) Navigator.of(context).pop();
 
-        
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -119,10 +121,9 @@ class _HomePageState extends State<HomePage>
           ),
         );
       } catch (e) {
-        
         if (mounted) Navigator.of(context).pop();
 
-        
+        // Mostrar erro
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erro ao traduzir ingredientes: $e'),
@@ -134,17 +135,21 @@ class _HomePageState extends State<HomePage>
   }
 
   void _addToFavorites(Map<String, dynamic> recipe) {
-    _favoritesService.addToFavorites(recipe);
-    setState(() {}); 
+    if (!_favorites.any((fav) => fav['id'] == recipe['id'])) {
+      setState(() {
+        _favorites.add(recipe);
+      });
+    }
   }
 
   void _removeFromFavorites(Map<String, dynamic> recipe) {
-    _favoritesService.removeFromFavorites(recipe);
-    setState(() {}); 
+    setState(() {
+      _favorites.removeWhere((fav) => fav['id'] == recipe['id']);
+    });
   }
 
   bool _isFavorite(Map<String, dynamic> recipe) {
-    return _favoritesService.isFavorite(recipe);
+    return _favorites.any((fav) => fav['id'] == recipe['id']);
   }
 
   void _openRecipeDetail(Map<String, dynamic> recipe) {
@@ -168,7 +173,33 @@ class _HomePageState extends State<HomePage>
         ),
       ),
     );
-    setState(() {}); 
+    setState(() {}); // Atualiza favoritos ao voltar
+  }
+
+  Future<void> _debugDatabase() async {
+    final dbService = TranslationDatabaseService();
+
+    print('\n🔍 === DEBUG SISTEMA DE TRADUÇÃO ===');
+
+    // Informações sobre OpenAI
+    print('\n📡 OpenAI Configuration:');
+    print('  - Model: ${OpenAITranslationService.getCurrentModel()}');
+    print('  - API Configured: ${OpenAITranslationService.isConfigured()}');
+
+    print('\n🗄️ Database Information:');
+    await dbService.debugDatabaseStatus();
+    await dbService.debugPrintAllTranslations();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Debug executado! Modelo: ${OpenAITranslationService.getCurrentModel()}',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -180,6 +211,13 @@ class _HomePageState extends State<HomePage>
         foregroundColor: Colors.white,
         title: const Text("O que tem pra hoje?"),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: _debugDatabase,
+            tooltip: 'Debug do Sistema',
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -191,10 +229,10 @@ class _HomePageState extends State<HomePage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          
+          // Primeira aba: Buscar Receitas
           Column(
             children: [
-              
+              // Conteúdo principal (scrollable)
               Expanded(
                 child: SingleChildScrollView(
                   child: Padding(
@@ -202,7 +240,6 @@ class _HomePageState extends State<HomePage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Padding(
@@ -221,11 +258,11 @@ class _HomePageState extends State<HomePage>
                             ),
                           ),
                         ),
-                        // Campo de pesquisa 
                         TextField(
                           controller: _ingredientController,
                           decoration: InputDecoration(
-                            hintText: 'Digite um ingrediente',
+                            hintText:
+                                'Digite um ingrediente (ex: tomate, frango)',
                             filled: true,
                             fillColor: const Color(0xFFE8F5E9),
                             contentPadding: const EdgeInsets.symmetric(
@@ -247,7 +284,6 @@ class _HomePageState extends State<HomePage>
                           onSubmitted: (_) => _addIngredient(),
                         ),
                         const SizedBox(height: 20),
-                        //ingredientes
                         Wrap(
                           spacing: 10,
                           runSpacing: 8,
@@ -282,7 +318,7 @@ class _HomePageState extends State<HomePage>
                             ),
                           ),
                         const SizedBox(height: 20),
-                        //sugestão
+                        // Título da sugestão
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Padding(
@@ -358,13 +394,14 @@ class _HomePageState extends State<HomePage>
                                                     ),
                                                   ),
                                           ),
-                                          // Conteúdo receita
+                                          // Conteúdo da receita
                                           Padding(
                                             padding: const EdgeInsets.all(16.0),
                                             child: Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
+                                                // Título
                                                 Text(
                                                   suggestion['title'] ?? '',
                                                   style: const TextStyle(
@@ -374,6 +411,7 @@ class _HomePageState extends State<HomePage>
                                                   ),
                                                 ),
                                                 const SizedBox(height: 8),
+                                                // Resumo
                                                 if (suggestion['summary'] !=
                                                     null)
                                                   Text(
@@ -391,7 +429,7 @@ class _HomePageState extends State<HomePage>
                                                     ),
                                                   ),
                                                 const SizedBox(height: 8),
-                                                // Botão favorito
+                                                // Botão de favorito
                                                 Row(
                                                   mainAxisAlignment:
                                                       MainAxisAlignment.end,
@@ -431,16 +469,59 @@ class _HomePageState extends State<HomePage>
                                   );
                                 },
                               ),
-                        const SizedBox(height: 20),
+                        // Espaçamento extra para o botão fixo
+                        const SizedBox(height: 100),
                       ],
+                    ),
+                  ),
+                ),
+              ),
+              // Botão fixo na parte inferior
+              Container(
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.3),
+                      spreadRadius: 1,
+                      blurRadius: 5,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _ingredients.isEmpty ? null : _searchRecipes,
+                      icon: const Icon(Icons.search),
+                      label: Text(
+                        _ingredients.isEmpty
+                            ? 'Adicione ingredientes para buscar'
+                            : 'Buscar Receitas (${_ingredients.length} ingredientes)',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _ingredients.isEmpty
+                            ? Colors.grey
+                            : const Color(0xFF388E3C),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey[300],
+                        disabledForegroundColor: Colors.grey[600],
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        textStyle: const TextStyle(fontSize: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          //  aba dos Favoritos
-          _favoritesService.favorites.isEmpty
+          // Segunda aba: Favoritos
+          _favorites.isEmpty
               ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -456,9 +537,9 @@ class _HomePageState extends State<HomePage>
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _favoritesService.favorites.length,
+                  itemCount: _favorites.length,
                   itemBuilder: (context, index) {
-                    final fav = _favoritesService.favorites[index];
+                    final fav = _favorites[index];
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       shape: RoundedRectangleBorder(
@@ -497,46 +578,6 @@ class _HomePageState extends State<HomePage>
                   },
                 ),
         ],
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16.0),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _ingredients.isEmpty ? null : _searchRecipes,
-              icon: const Icon(Icons.search),
-              label: Text(
-                _ingredients.isEmpty
-                    ? 'Adicione ingredientes para buscar'
-                    : 'Buscar Receitas (${_ingredients.length} ingredientes)',
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _ingredients.isEmpty
-                    ? Colors.grey
-                    : const Color(0xFF388E3C),
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey[300],
-                disabledForegroundColor: Colors.grey[600],
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(fontSize: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -3,12 +3,18 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:oqtemprahoje/services/translation_manager.dart';
+import 'package:oqtemprahoje/services/favorites_service.dart';
 import 'recipe_detail_page.dart';
 
 class RecipePage extends StatefulWidget {
   final List<String> ingredients;
+  final List<String>? originalIngredients;
 
-  const RecipePage({super.key, required this.ingredients});
+  const RecipePage({
+    super.key,
+    required this.ingredients,
+    this.originalIngredients,
+  });
 
   @override
   State<RecipePage> createState() => _RecipePageState();
@@ -17,6 +23,7 @@ class RecipePage extends StatefulWidget {
 class _RecipePageState extends State<RecipePage> {
   List<dynamic> _recipes = [];
   bool _isLoading = true;
+  final FavoritesService _favoritesService = FavoritesService();
 
   @override
   void initState() {
@@ -38,7 +45,6 @@ class _RecipePageState extends State<RecipePage> {
         data,
       );
 
-      // Traduzir títulos das receitas usando o sistema de banco + Gemini
       final translationManager = TranslationManager();
       final translatedRecipes = await translationManager.translateRecipesList(
         recipes,
@@ -88,7 +94,25 @@ class _RecipePageState extends State<RecipePage> {
                       recipe['title'],
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            _favoritesService.isFavorite(recipe)
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            color: Colors.red,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _favoritesService.toggleFavorite(recipe);
+                            });
+                          },
+                        ),
+                        const Icon(Icons.arrow_forward_ios, size: 16),
+                      ],
+                    ),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -97,8 +121,12 @@ class _RecipePageState extends State<RecipePage> {
                             recipeId: recipe['id'],
                             title: recipe['title'],
                             recipe: recipe,
-                            isFavorite: false,
-                            onFavoriteToggle: () {},
+                            isFavorite: _favoritesService.isFavorite(recipe),
+                            onFavoriteToggle: () {
+                              setState(() {
+                                _favoritesService.toggleFavorite(recipe);
+                              });
+                            },
                           ),
                         ),
                       );

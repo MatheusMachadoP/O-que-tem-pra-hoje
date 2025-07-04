@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:oqtemprahoje/services/translation_manager.dart';
+import 'package:oqtemprahoje/services/gemini_translation_service.dart';
 
 class RecipeDetailPage extends StatefulWidget {
   final int recipeId;
@@ -46,14 +47,38 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     if (response.statusCode == 200) {
       Map<String, dynamic> recipeData = json.decode(response.body);
 
-      // Traduzir campos da receita usando o sistema de banco + Gemini
+      // Limpar HTML dos dados antes da tradução
+      final geminiService = GeminiService();
+      if (recipeData['instructions'] != null) {
+        recipeData['instructions'] = geminiService.removeHtmlTags(
+          recipeData['instructions'].toString(),
+        );
+      }
+      if (recipeData['summary'] != null) {
+        recipeData['summary'] = geminiService.removeHtmlTags(
+          recipeData['summary'].toString(),
+        );
+      }
+
       final translationManager = TranslationManager();
-      final translatedRecipe = await translationManager.translateRecipeFields(
-        recipeData,
-        ['title', 'instructions'], // Campos a serem traduzidos
+
+      print('🔍 DEBUG: Traduzindo receita ${widget.recipeId}');
+      print('📄 Título original: ${recipeData['title']}');
+      print(
+        '📝 Instruções originais: ${recipeData['instructions']?.substring(0, 100) ?? 'null'}...',
       );
 
-      // Traduzir ingredientes separadamente (pois é uma lista)
+      final translatedRecipe = await translationManager.translateRecipeFields(
+        recipeData,
+        ['title', 'instructions'], 
+      );
+
+      print('✅ Título traduzido: ${translatedRecipe['title']}');
+      print(
+        '✅ Instruções traduzidas: ${translatedRecipe['instructions']?.substring(0, 100) ?? 'null'}...',
+      );
+
+      // Traduzindo ingredientes
       if (translatedRecipe['extendedIngredients'] != null) {
         List<dynamic> ingredients = translatedRecipe['extendedIngredients'];
         for (int i = 0; i < ingredients.length; i++) {
@@ -69,7 +94,6 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               ingredients[i]['original'] = translatedText;
             }
           } catch (e) {
-            // Se houver erro na tradução de um ingrediente, mantém o original
             print('Erro ao traduzir ingrediente $i: $e');
           }
         }
